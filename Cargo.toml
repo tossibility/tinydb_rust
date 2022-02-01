@@ -1,0 +1,11 @@
+[package]
+name = "kawaii"
+version = "0.1.0"
+authors = ["Toshitaka Adachi <adatch.t@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bit-vec = "0.6.1"
+rand = "0.7.2"
