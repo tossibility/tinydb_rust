@@ -1,0 +1,83 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'kawaii'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=kawaii"
+                ],
+                "filter": {
+                    "name": "kawaii",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'kawaii'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=kawaii",
+                    "--package=kawaii"
+                ],
+                "filter": {
+                    "name": "kawaii",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'kawaii'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=kawaii",
+                    "--package=kawaii"
+                ],
+                "filter": {
+                    "name": "kawaii",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'bench'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=bench",
+                    "--package=kawaii"
+                ],
+                "filter": {
+                    "name": "bench",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
