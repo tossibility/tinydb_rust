@@ -5,7 +5,7 @@
 //!
 //! # 実装したもの
 //!
-//! * 値を表すDatum構造体
+//! * 値を表すValue構造体
 //! * リレーションTraitとそれを実装するテーブルとかいろいろ
 //! * Select, LessThan, EqualsTo, GroupBy
 //!
@@ -85,14 +85,14 @@ pub enum TypeKind {
 /// # Examples
 ///
 /// ```
-/// use kawaii::{Datum, NULL};
-/// let s: kawaii::Datum = "str".into();
-/// let i: kawaii::Datum = 32.into();
-/// let n: kawaii::Datum = NULL.into();
+/// use kawaii::{Value, NULL};
+/// let s: kawaii::Value = "str".into();
+/// let i: kawaii::Value = 32.into();
+/// let n: kawaii::Value = NULL.into();
 /// ```
 ///
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
-pub enum Datum<'a> {
+pub enum Value<'a> {
     /// 文字列
     Varchar(&'a str),
     /// 整数
@@ -101,80 +101,80 @@ pub enum Datum<'a> {
     Null(Null),
 }
 
-impl<'a> From<&'a String> for Datum<'a> {
+impl<'a> From<&'a String> for Value<'a> {
     fn from(item: &'a String) -> Self {
-        Datum::Varchar(item.as_ref())
+        Value::Varchar(item.as_ref())
     }
 }
 
-impl<'a> From<&'a str> for Datum<'a> {
+impl<'a> From<&'a str> for Value<'a> {
     fn from(item: &'a str) -> Self {
-        Datum::Varchar(item)
+        Value::Varchar(item)
     }
 }
 
-impl<'a> From<i32> for Datum<'a> {
+impl<'a> From<i32> for Value<'a> {
     fn from(item: i32) -> Self {
-        Datum::Integer(item)
+        Value::Integer(item)
     }
 }
 
-impl<'a> From<Null> for Datum<'a> {
+impl<'a> From<Null> for Value<'a> {
     fn from(item: Null) -> Self {
-        Datum::Null(item)
+        Value::Null(item)
     }
 }
 
-impl<'a> fmt::Display for Datum<'a> {
+impl<'a> fmt::Display for Value<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Datum::Varchar(val) => write!(f, "{}", val),
-            Datum::Integer(val) => write!(f, "{}", val),
-            Datum::Null(val) => write!(f, "{}", val),
+            Value::Varchar(val) => write!(f, "{}", val),
+            Value::Integer(val) => write!(f, "{}", val),
+            Value::Null(val) => write!(f, "{}", val),
         }
     }
 }
 
 ///
-/// Datumとしての振る舞いを規定したTraitです。
+/// Valueとしての振る舞いを規定したTraitです。
 ///
 /// # Examples
 ///
 /// ```
-/// use kawaii::{Datum, NULL};
-/// let s: kawaii::Datum = "str".into();
-/// let i: kawaii::Datum = 32.into();
-/// let n: kawaii::Datum = NULL.into();
+/// use kawaii::{Value, NULL};
+/// let s: kawaii::Value = "str".into();
+/// let i: kawaii::Value = 32.into();
+/// let n: kawaii::Value = NULL.into();
 /// ```
 ///
-pub trait AsDatum {
-    fn as_datum_ref(&self) -> Datum;
+pub trait AsValue {
+    fn as_datum_ref(&self) -> Value;
 }
 
-impl<'a> AsDatum for &'a str {
-    fn as_datum_ref(&self) -> Datum {
+impl<'a> AsValue for &'a str {
+    fn as_datum_ref(&self) -> Value {
         (*self).into()
     }
 }
 
-impl AsDatum for i32 {
-    fn as_datum_ref(&self) -> Datum {
+impl AsValue for i32 {
+    fn as_datum_ref(&self) -> Value {
         (*self).into()
     }
 }
 
-impl AsDatum for Null {
-    fn as_datum_ref(&self) -> Datum {
+impl AsValue for Null {
+    fn as_datum_ref(&self) -> Value {
         (*self).into()
     }
 }
 
-impl AsDatum for Datum<'_> {
-    fn as_datum_ref(&self) -> Datum {
+impl AsValue for Value<'_> {
+    fn as_datum_ref(&self) -> Value {
         match self {
-            Datum::Varchar(val) => Datum::Varchar(val),
-            Datum::Integer(val) => Datum::Integer(*val),
-            Datum::Null(val) => Datum::Null(*val),
+            Value::Varchar(val) => Value::Varchar(val),
+            Value::Integer(val) => Value::Integer(*val),
+            Value::Null(val) => Value::Null(*val),
         }
     }
 }
@@ -441,15 +441,15 @@ where
 pub trait AsColumn: fmt::Debug {
     fn num_keys(&self) -> KeyId;
     fn num_rows(&self) -> RowId;
-    fn append(&mut self, key: &dyn AsDatum) -> Option<KeyId>;
+    fn append(&mut self, key: &dyn AsValue) -> Option<KeyId>;
     fn pop(&mut self) -> Option<KeyId>;
-    fn id_of(&self, key: &dyn AsDatum) -> Option<KeyId>;
-    fn range(&self, range: Range<&dyn AsDatum>) -> Option<BitMap>;
-    fn range_from(&self, key: &dyn AsDatum) -> Option<BitMap>;
-    fn range_to(&self, key: &dyn AsDatum) -> Option<BitMap>;
-    fn key_of(&self, key_id: KeyId) -> Datum;
+    fn id_of(&self, key: &dyn AsValue) -> Option<KeyId>;
+    fn range(&self, range: Range<&dyn AsValue>) -> Option<BitMap>;
+    fn range_from(&self, key: &dyn AsValue) -> Option<BitMap>;
+    fn range_to(&self, key: &dyn AsValue) -> Option<BitMap>;
+    fn key_of(&self, key_id: KeyId) -> Value;
     fn id_at(&self, row_id: RowId) -> KeyId;
-    fn key_at(&self, row_id: RowId) -> Datum;
+    fn key_at(&self, row_id: RowId) -> Value;
 }
 
 /// Table用カラム
@@ -481,16 +481,16 @@ impl AsColumn for TableColumn {
             TableColumn::Integer(column) => column.num_rows(),
         }
     }
-    fn append(&mut self, key: &dyn AsDatum) -> Option<KeyId> {
+    fn append(&mut self, key: &dyn AsValue) -> Option<KeyId> {
         match self {
             TableColumn::Varchar(column) => match key.as_datum_ref() {
-                Datum::Varchar(key) => Some(column.append(key.to_string())),
-                Datum::Null(_) => Some(column.append_null()),
+                Value::Varchar(key) => Some(column.append(key.to_string())),
+                Value::Null(_) => Some(column.append_null()),
                 _ => None,
             },
             TableColumn::Integer(column) => match key.as_datum_ref() {
-                Datum::Integer(key) => Some(column.append(key)),
-                Datum::Null(_) => Some(column.append_null()),
+                Value::Integer(key) => Some(column.append(key)),
+                Value::Null(_) => Some(column.append_null()),
                 _ => None,
             },
         }
@@ -501,47 +501,47 @@ impl AsColumn for TableColumn {
             TableColumn::Integer(column) => column.pop(),
         }
     }
-    fn id_of(&self, key: &dyn AsDatum) -> Option<KeyId> {
+    fn id_of(&self, key: &dyn AsValue) -> Option<KeyId> {
         match (self, key.as_datum_ref()) {
-            (TableColumn::Varchar(column), Datum::Varchar(key)) => column.id_of(key),
-            (TableColumn::Integer(column), Datum::Integer(key)) => column.id_of(&key),
+            (TableColumn::Varchar(column), Value::Varchar(key)) => column.id_of(key),
+            (TableColumn::Integer(column), Value::Integer(key)) => column.id_of(&key),
             _ => None,
         }
     }
-    fn range(&self, range: Range<&dyn AsDatum>) -> Option<BitMap> {
+    fn range(&self, range: Range<&dyn AsValue>) -> Option<BitMap> {
         match (self, range.start.as_datum_ref(), range.end.as_datum_ref()) {
-            (TableColumn::Varchar(column), Datum::Varchar(start), Datum::Varchar(end)) => {
+            (TableColumn::Varchar(column), Value::Varchar(start), Value::Varchar(end)) => {
                 Some(column.range_into_bits(start.to_string()..end.to_string()))
             }
-            (TableColumn::Integer(column), Datum::Integer(start), Datum::Integer(end)) => {
+            (TableColumn::Integer(column), Value::Integer(start), Value::Integer(end)) => {
                 Some(column.range_into_bits(start..end))
             }
             _ => None,
         }
     }
-    fn range_from(&self, key: &dyn AsDatum) -> Option<BitMap> {
+    fn range_from(&self, key: &dyn AsValue) -> Option<BitMap> {
         match (self, key.as_datum_ref()) {
-            (TableColumn::Varchar(column), Datum::Varchar(key)) => {
+            (TableColumn::Varchar(column), Value::Varchar(key)) => {
                 Some(column.range_into_bits(key.to_string()..))
             }
-            (TableColumn::Integer(column), Datum::Integer(key)) => {
+            (TableColumn::Integer(column), Value::Integer(key)) => {
                 Some(column.range_into_bits(key..))
             }
             _ => None,
         }
     }
-    fn range_to(&self, key: &dyn AsDatum) -> Option<BitMap> {
+    fn range_to(&self, key: &dyn AsValue) -> Option<BitMap> {
         match (self, key.as_datum_ref()) {
-            (TableColumn::Varchar(column), Datum::Varchar(key)) => {
+            (TableColumn::Varchar(column), Value::Varchar(key)) => {
                 Some(column.range_into_bits(..key.to_string()))
             }
-            (TableColumn::Integer(column), Datum::Integer(key)) => {
+            (TableColumn::Integer(column), Value::Integer(key)) => {
                 Some(column.range_into_bits(..key))
             }
             _ => None,
         }
     }
-    fn key_of(&self, key_id: KeyId) -> Datum {
+    fn key_of(&self, key_id: KeyId) -> Value {
         if key_id >= self.num_keys() {
             return NULL.into();
         }
@@ -556,7 +556,7 @@ impl AsColumn for TableColumn {
             TableColumn::Integer(column) => column.id_at(row_id),
         }
     }
-    fn key_at(&self, row_id: RowId) -> Datum {
+    fn key_at(&self, row_id: RowId) -> Value {
         if let Some(key) = match self {
             TableColumn::Varchar(column) => column.key_at(row_id).map(|k| k.into()),
             TableColumn::Integer(column) => column.key_at(row_id).map(|k| (*k).into()),
@@ -599,7 +599,7 @@ impl Attribute {
 /// # fn main() {
 /// #     let mut table = Table::create(
 /// #         "shohin",
-/// #         attribute_slice![
+/// #         attributes![
 /// #             ("shohin_id", TypeKind::Integer),
 /// #             ("shohin_name", TypeKind::Varchar),
 /// #             ("kubun_id", TypeKind::Integer),
@@ -609,7 +609,7 @@ impl Attribute {
 /// # }
 /// ```
 #[macro_export]
-macro_rules! attribute_slice {
+macro_rules! attributes {
     ( $( { $name:expr, $($kind:expr),+ } ),* ) => {
         &[ $( Attribute::create($name.as_ref(), $( $kind ),+ ) ),* ]
     };
@@ -673,7 +673,7 @@ impl IndexMut<ColumnId> for Definition {
 /// タプルを表します(カラムナーなのでfetchでしか使われない)
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
 pub struct Tuple<'a> {
-    values: Vec<Datum<'a>>,
+    values: Vec<Value<'a>>,
 }
 
 impl<'a> Tuple<'a> {
@@ -683,7 +683,7 @@ impl<'a> Tuple<'a> {
 }
 
 impl<'a> Deref for Tuple<'a> {
-    type Target = Vec<Datum<'a>>;
+    type Target = Vec<Value<'a>>;
     fn deref(&self) -> &Self::Target {
         &self.values
     }
@@ -696,7 +696,7 @@ impl<'a> DerefMut for Tuple<'a> {
 }
 
 impl<'a> Index<ColumnId> for Tuple<'a> {
-    type Output = Datum<'a>;
+    type Output = Value<'a>;
     fn index(&self, col_id: ColumnId) -> &Self::Output {
         &self.values[col_id]
     }
@@ -858,7 +858,7 @@ impl Table {
     pub fn create(name: &str, attributes: &[Attribute]) -> Table {
         Table::new(Definition::create(name, attributes))
     }
-    pub fn insert<T: AsDatum>(&mut self, tuple: &[T]) -> Option<&mut Table> {
+    pub fn insert<T: AsValue>(&mut self, tuple: &[T]) -> Option<&mut Table> {
         let n_cols = self.num_columns();
         if n_cols != tuple.len() {
             return None;
@@ -899,11 +899,11 @@ impl fmt::Display for Table {
 }
 
 pub trait Insertable<'a> {
-    fn insert<T: AsDatum>(self, tuple: &[T]) -> Option<&'a mut Table>;
+    fn insert<T: AsValue>(self, tuple: &[T]) -> Option<&'a mut Table>;
 }
 
 impl<'a> Insertable<'a> for Option<&'a mut Table> {
-    fn insert<T: AsDatum>(self, tuple: &[T]) -> Option<&'a mut Table> {
+    fn insert<T: AsValue>(self, tuple: &[T]) -> Option<&'a mut Table> {
         self.and_then(|table| table.insert(tuple))
     }
 }
@@ -1018,14 +1018,14 @@ impl fmt::Display for FilteredRelation<'_> {
 /// リレーションに対してカラム名と値を指定して '<' 比較します。
 ///
 pub trait LessThan: Relation {
-    fn less_than<Key: AsDatum>(&self, col_id: &str, key: Key) -> FilteredRelation;
+    fn less_than<Key: AsValue>(&self, col_id: &str, key: Key) -> FilteredRelation;
 }
 
 impl<T> LessThan for T
 where
     T: Relation,
 {
-    fn less_than<Key: AsDatum>(&self, col_name: &str, key: Key) -> FilteredRelation {
+    fn less_than<Key: AsValue>(&self, col_name: &str, key: Key) -> FilteredRelation {
         let valid_row_ids = {
             let mut valid_row_ids = Vec::new();
             if let Some(col_id) = self.definition().name_to_id(col_name) {
@@ -1063,14 +1063,14 @@ where
 /// リレーションに対してカラム名と値を指定して '==' 比較します。
 ///
 pub trait EqualTo: Relation {
-    fn equal_to<Key: AsDatum>(&self, col_name: &str, key: Key) -> FilteredRelation;
+    fn equal_to<Key: AsValue>(&self, col_name: &str, key: Key) -> FilteredRelation;
 }
 
 impl<T> EqualTo for T
 where
     T: Relation,
 {
-    fn equal_to<Key: AsDatum>(&self, col_name: &str, key: Key) -> FilteredRelation {
+    fn equal_to<Key: AsValue>(&self, col_name: &str, key: Key) -> FilteredRelation {
         let valid_row_ids = {
             let mut valid_row_ids = Vec::new();
             if let Some(col_id) = self.definition().name_to_id(col_name) {
@@ -1111,8 +1111,8 @@ pub struct Count {
 }
 
 impl Count {
-    fn calculate<T: AsDatum>(&mut self, value: T) {
-        if let Datum::Null(_) = value.as_datum_ref() {
+    fn calculate<T: AsValue>(&mut self, value: T) {
+        if let Value::Null(_) = value.as_datum_ref() {
             return;
         }
         self.result += 1;
@@ -1130,8 +1130,8 @@ pub struct Average {
 }
 
 impl Average {
-    fn calculate<T: AsDatum>(&mut self, value: T) {
-        if let Datum::Integer(val) = value.as_datum_ref() {
+    fn calculate<T: AsValue>(&mut self, value: T) {
+        if let Value::Integer(val) = value.as_datum_ref() {
             self.sum += val;
             self.count += 1;
         }
@@ -1154,7 +1154,7 @@ pub enum AggFunc {
 }
 
 impl AggFunc {
-    fn calculate<T: AsDatum>(&mut self, value: T) {
+    fn calculate<T: AsValue>(&mut self, value: T) {
         match self {
             AggFunc::Count(func) => func.calculate(value),
             AggFunc::Average(func) => func.calculate(value),
@@ -1273,7 +1273,8 @@ where
                 name: match master_agg_funcs[agg_i] {
                     AggFunc::Count(_) => "count",
                     AggFunc::Average(_) => "average",
-                }.to_string(),
+                }
+                .to_string(),
                 kind: TypeKind::Integer,
             });
         }
@@ -1310,7 +1311,7 @@ where
 /// # fn main() {
 /// #     let mut table = Table::create(
 /// #         "shohin",
-/// #         attribute_slice![
+/// #         attributes![
 /// #             ("shohin_id", TypeKind::Integer),
 /// #             ("shohin_name", TypeKind::Varchar),
 /// #             ("kubun_id", TypeKind::Integer),
@@ -1318,19 +1319,19 @@ where
 /// #         ],
 /// #     );
 /// #     table
-/// #         .insert(datum_slice!(1, "りんご", 1, 300))
-/// #         .insert(datum_slice!(2, "みかん", 1, 130))
-/// #         .insert(datum_slice!(3, "キャベツ", 2, 200))
-/// #         .insert(datum_slice!(4, "さんま", 3, 220))
-/// #         .insert(datum_slice!(5, "わかめ", NULL, 250)) //区分がNULL
-/// #         .insert(datum_slice!(6, "しいたけ", 4, 180)) //該当区分なし
-/// #         .insert(datum_slice!(7, "ドリアン", 1, NULL));
+/// #         .insert(values!(1, "りんご", 1, 300))
+/// #         .insert(values!(2, "みかん", 1, 130))
+/// #         .insert(values!(3, "キャベツ", 2, 200))
+/// #         .insert(values!(4, "さんま", 3, 220))
+/// #         .insert(values!(5, "わかめ", NULL, 250)) //区分がNULL
+/// #         .insert(values!(6, "しいたけ", 4, 180)) //該当区分なし
+/// #         .insert(values!(7, "ドリアン", 1, NULL));
 /// # }
 /// ```
 ///
 #[macro_export]
-macro_rules! datum_slice {
-    ( $( $x:expr ),* ) => ( &[ $( Datum::from($x) ),* ] )
+macro_rules! values {
+    ( $( $x:expr ),* ) => ( &[ $( Value::from($x) ),* ] )
 }
 
 #[cfg(test)]
@@ -1420,7 +1421,7 @@ mod tests {
     fn create_shohin_table() -> Table {
         let mut table = Table::create(
             "shohin",
-            attribute_slice![
+            attributes![
                 ("shohin_id", TypeKind::Integer),
                 ("shohin_name", TypeKind::Varchar),
                 ("kubun_id", TypeKind::Integer),
@@ -1428,28 +1429,28 @@ mod tests {
             ],
         );
         table
-            .insert(datum_slice!(1, "りんご", 1, 300))
-            .insert(datum_slice!(2, "みかん", 1, 130))
-            .insert(datum_slice!(3, "キャベツ", 2, 200))
-            .insert(datum_slice!(4, "さんま", 3, 220))
-            .insert(datum_slice!(5, "わかめ", NULL, 250)) //区分がNULL
-            .insert(datum_slice!(6, "しいたけ", 4, 180)) //該当区分なし
-            .insert(datum_slice!(7, "ドリアン", 1, NULL));
+            .insert(values!(1, "りんご", 1, 300))
+            .insert(values!(2, "みかん", 1, 130))
+            .insert(values!(3, "キャベツ", 2, 200))
+            .insert(values!(4, "さんま", 3, 220))
+            .insert(values!(5, "わかめ", NULL, 250)) //区分がNULL
+            .insert(values!(6, "しいたけ", 4, 180)) //該当区分なし
+            .insert(values!(7, "ドリアン", 1, NULL));
         table
     }
 
     fn create_kubun_table() -> Table {
         let mut table = Table::create(
             "kubun",
-            attribute_slice![
+            attributes![
                 ("kubun_id", TypeKind::Integer),
                 ("kubun_name", TypeKind::Varchar)
             ],
         );
         table
-            .insert(datum_slice!(1, "くだもの"))
-            .insert(datum_slice!(2, "野菜"))
-            .insert(datum_slice!(3, "魚"));
+            .insert(values!(1, "くだもの"))
+            .insert(values!(2, "野菜"))
+            .insert(values!(3, "魚"));
         table
     }
 
@@ -1469,19 +1470,19 @@ mod tests {
         let actual = shohin.select(&["shohin_id", "shohin_name"]);
         let mut expected = Table::create(
             "shohin",
-            attribute_slice![
+            attributes![
                 ("shohin_id", TypeKind::Integer),
                 ("shohin_name", TypeKind::Varchar)
             ],
         );
         expected
-            .insert(datum_slice!(1, "りんご"))
-            .insert(datum_slice!(2, "みかん"))
-            .insert(datum_slice!(3, "キャベツ"))
-            .insert(datum_slice!(4, "さんま"))
-            .insert(datum_slice!(5, "わかめ")) //区分がNULL
-            .insert(datum_slice!(6, "しいたけ")) //該当区分なし
-            .insert(datum_slice!(7, "ドリアン"));
+            .insert(values!(1, "りんご"))
+            .insert(values!(2, "みかん"))
+            .insert(values!(3, "キャベツ"))
+            .insert(values!(4, "さんま"))
+            .insert(values!(5, "わかめ")) //区分がNULL
+            .insert(values!(6, "しいたけ")) //該当区分なし
+            .insert(values!(7, "ドリアン"));
         assert_eq!(actual.fetch(0..10), expected.fetch(0..10));
     }
 
@@ -1491,7 +1492,7 @@ mod tests {
         let actual = shohin.less_than("shohin_id", 4);
         let mut expected = Table::create(
             "shohin",
-            attribute_slice![
+            attributes![
                 ("shohin_id", TypeKind::Integer),
                 ("shohin_name", TypeKind::Varchar),
                 ("kubun_id", TypeKind::Integer),
@@ -1499,9 +1500,9 @@ mod tests {
             ],
         );
         expected
-            .insert(datum_slice!(1, "りんご", 1, 300))
-            .insert(datum_slice!(2, "みかん", 1, 130))
-            .insert(datum_slice!(3, "キャベツ", 2, 200));
+            .insert(values!(1, "りんご", 1, 300))
+            .insert(values!(2, "みかん", 1, 130))
+            .insert(values!(3, "キャベツ", 2, 200));
         assert_eq!(actual.fetch(0..10), expected.fetch(0..10));
     }
 
@@ -1511,14 +1512,14 @@ mod tests {
         let actual = shohin.equal_to("shohin_id", 4);
         let mut expected = Table::create(
             "shohin",
-            attribute_slice![
+            attributes![
                 ("shohin_id", TypeKind::Integer),
                 ("shohin_name", TypeKind::Varchar),
                 ("kubun_id", TypeKind::Integer),
                 ("price", TypeKind::Integer)
             ],
         );
-        expected.insert(datum_slice!(4, "さんま", 3, 220));
+        expected.insert(values!(4, "さんま", 3, 220));
         assert_eq!(actual.fetch(0..10), expected.fetch(0..10));
     }
 
@@ -1531,18 +1532,18 @@ mod tests {
         );
         let mut expected = Table::create(
             "shohin",
-            attribute_slice![
+            attributes![
                 ("kubun_id", TypeKind::Integer),
                 ("count", TypeKind::Integer),
                 ("average", TypeKind::Integer)
             ],
         );
         expected
-            .insert(datum_slice!(NULL, 1, 250))
-            .insert(datum_slice!(1, 3, 215))
-            .insert(datum_slice!(2, 1, 200))
-            .insert(datum_slice!(3, 1, 220))
-            .insert(datum_slice!(4, 1, 180));
+            .insert(values!(NULL, 1, 250))
+            .insert(values!(1, 3, 215))
+            .insert(values!(2, 1, 200))
+            .insert(values!(3, 1, 220))
+            .insert(values!(4, 1, 180));
         assert_eq!(
             actual.fetch(0..10).map(|mut t| {
                 t.sort();

@@ -23,7 +23,7 @@ fn setup_tables() -> (Table, Table) {
     let mut rng = rand::thread_rng();
     let mut shohin = Table::create(
         "shohin",
-        attribute_slice![
+        attributes![
             ("shohin_id", TypeKind::Integer),
             ("shohin_name", TypeKind::Varchar),
             ("kubun_id", TypeKind::Integer),
@@ -37,7 +37,7 @@ fn setup_tables() -> (Table, Table) {
         for _ in 0..len {
             name.push(add_char('あ', rng.gen_range(0, 82)));
         }
-        shohin.insert(datum_slice![
+        shohin.insert(values![
             i + 1,
             &name,
             rng.gen_range(0, 10000) + 1,
@@ -46,7 +46,7 @@ fn setup_tables() -> (Table, Table) {
     }
     let mut kubun = Table::create(
         "kubun",
-        attribute_slice![
+        attributes![
             ("kubun_id", TypeKind::Integer),
             ("kubun_name", TypeKind::Varchar)
         ],
@@ -58,7 +58,7 @@ fn setup_tables() -> (Table, Table) {
         for _ in 0..len {
             name.push(add_char('ア', rng.gen_range(0, 82)));
         }
-        kubun.insert(datum_slice![i + 1, &name]);
+        kubun.insert(values![i + 1, &name]);
     }
     (shohin, kubun)
 }
