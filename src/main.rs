@@ -178,22 +178,22 @@ mod tests {
 
     #[test]
     fn test_btree_custom_order() {
-        let mut map = BTreeMap::new();
-        map.insert(String::from("Alice"), 0);
-        map.insert(String::from("Bob"), 1);
-        map.insert(String::from("Charlie"), 2);
+        let mut map: BTreeMap<String, i32> = BTreeMap::new();
+        map.insert("Alice".into(), 0);
+        map.insert("Bob".into(), 1);
+        map.insert("Charlie".into(), 2);
         let mut iter = map.iter();
-        assert_eq!(iter.next(), Some((&String::from("Alice"), &0)));
-        assert_eq!(iter.next(), Some((&String::from("Bob"), &1)));
-        assert_eq!(iter.next(), Some((&String::from("Charlie"), &2)));
+        assert_eq!(iter.next(), Some((&"Alice".into(), &0)));
+        assert_eq!(iter.next(), Some((&"Bob".into(), &1)));
+        assert_eq!(iter.next(), Some((&"Charlie".into(), &2)));
 
         let mut map: BTreeMap<ReverseString, i32> = BTreeMap::new();
-        map.insert(ReverseString::from("Alice"), 0);
-        map.insert(ReverseString::from("Bob"), 1);
-        map.insert(ReverseString::from("Charlie"), 2);
+        map.insert("Alice".into(), 0);
+        map.insert("Bob".into(), 1);
+        map.insert("Charlie".into(), 2);
         let mut iter = map.iter();
-        assert_eq!(iter.next(), Some((&ReverseString::from("Charlie"), &2)));
-        assert_eq!(iter.next(), Some((&ReverseString::from("Bob"), &1)));
-        assert_eq!(iter.next(), Some((&ReverseString::from("Alice"), &0)));
+        assert_eq!(iter.next(), Some((&"Charlie".into(), &2)));
+        assert_eq!(iter.next(), Some((&"Bob".into(), &1)));
+        assert_eq!(iter.next(), Some((&"Alice".into(), &0)));
     }
 }
