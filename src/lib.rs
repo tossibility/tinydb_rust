@@ -148,29 +148,29 @@ impl<'a> fmt::Display for Value<'a> {
 /// ```
 ///
 pub trait AsValue {
-    fn as_datum_ref(&self) -> Value;
+    fn as_value_ref(&self) -> Value;
 }
 
 impl<'a> AsValue for &'a str {
-    fn as_datum_ref(&self) -> Value {
+    fn as_value_ref(&self) -> Value {
         (*self).into()
     }
 }
 
 impl AsValue for i32 {
-    fn as_datum_ref(&self) -> Value {
+    fn as_value_ref(&self) -> Value {
         (*self).into()
     }
 }
 
 impl AsValue for Null {
-    fn as_datum_ref(&self) -> Value {
+    fn as_value_ref(&self) -> Value {
         (*self).into()
     }
 }
 
 impl AsValue for Value<'_> {
-    fn as_datum_ref(&self) -> Value {
+    fn as_value_ref(&self) -> Value {
         match self {
             Value::Varchar(val) => Value::Varchar(val),
             Value::Integer(val) => Value::Integer(*val),
@@ -483,12 +483,12 @@ impl AsColumn for TableColumn {
     }
     fn append(&mut self, key: &dyn AsValue) -> Option<KeyId> {
         match self {
-            TableColumn::Varchar(column) => match key.as_datum_ref() {
+            TableColumn::Varchar(column) => match key.as_value_ref() {
                 Value::Varchar(key) => Some(column.append(key.to_string())),
                 Value::Null(_) => Some(column.append_null()),
                 _ => None,
             },
-            TableColumn::Integer(column) => match key.as_datum_ref() {
+            TableColumn::Integer(column) => match key.as_value_ref() {
                 Value::Integer(key) => Some(column.append(key)),
                 Value::Null(_) => Some(column.append_null()),
                 _ => None,
@@ -502,14 +502,14 @@ impl AsColumn for TableColumn {
         }
     }
     fn id_of(&self, key: &dyn AsValue) -> Option<KeyId> {
-        match (self, key.as_datum_ref()) {
+        match (self, key.as_value_ref()) {
             (TableColumn::Varchar(column), Value::Varchar(key)) => column.id_of(key),
             (TableColumn::Integer(column), Value::Integer(key)) => column.id_of(&key),
             _ => None,
         }
     }
     fn range(&self, range: Range<&dyn AsValue>) -> Option<BitMap> {
-        match (self, range.start.as_datum_ref(), range.end.as_datum_ref()) {
+        match (self, range.start.as_value_ref(), range.end.as_value_ref()) {
             (TableColumn::Varchar(column), Value::Varchar(start), Value::Varchar(end)) => {
                 Some(column.range_into_bits(start.to_string()..end.to_string()))
             }
@@ -520,7 +520,7 @@ impl AsColumn for TableColumn {
         }
     }
     fn range_from(&self, key: &dyn AsValue) -> Option<BitMap> {
-        match (self, key.as_datum_ref()) {
+        match (self, key.as_value_ref()) {
             (TableColumn::Varchar(column), Value::Varchar(key)) => {
                 Some(column.range_into_bits(key.to_string()..))
             }
@@ -531,7 +531,7 @@ impl AsColumn for TableColumn {
         }
     }
     fn range_to(&self, key: &dyn AsValue) -> Option<BitMap> {
-        match (self, key.as_datum_ref()) {
+        match (self, key.as_value_ref()) {
             (TableColumn::Varchar(column), Value::Varchar(key)) => {
                 Some(column.range_into_bits(..key.to_string()))
             }
@@ -1112,7 +1112,7 @@ pub struct Count {
 
 impl Count {
     fn calculate<T: AsValue>(&mut self, value: T) {
-        if let Value::Null(_) = value.as_datum_ref() {
+        if let Value::Null(_) = value.as_value_ref() {
             return;
         }
         self.result += 1;
@@ -1131,7 +1131,7 @@ pub struct Average {
 
 impl Average {
     fn calculate<T: AsValue>(&mut self, value: T) {
-        if let Value::Integer(val) = value.as_datum_ref() {
+        if let Value::Integer(val) = value.as_value_ref() {
             self.sum += val;
             self.count += 1;
         }
