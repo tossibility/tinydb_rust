@@ -45,10 +45,11 @@
 //!
 use bit_vec::BitVec;
 use std::borrow::Borrow;
-use std::cmp;
+use std::cmp::{self, Ordering};
 use std::collections::{btree_map, BTreeMap, HashMap};
 use std::convert::From;
 use std::fmt;
+use std::iter::Map;
 use std::ops::{Deref, DerefMut, Index, IndexMut, Range, RangeBounds};
 
 /// BTreeの範囲検索結果。
@@ -189,6 +190,101 @@ type ColumnId = usize;
 /// FIXME: KeyIdをEnumにしてif文を無くしたい
 const NULL_KEY_ID: KeyId = KeyId::max_value();
 
+#[derive(Debug, Eq, Clone, Copy)]
+pub struct ValuePtr<Key: Ord>(*const Key);
+
+impl<Key: Ord> From<&Key> for ValuePtr<Key> {
+    fn from(value: &Key) -> Self {
+        Self(value)
+    }
+}
+
+impl Borrow<str> for ValuePtr<String> {
+    fn borrow(&self) -> &str {
+        self.as_ref().borrow()
+    }
+}
+
+impl Borrow<str> for ValuePtr<&str> {
+    fn borrow(&self) -> &str {
+        self.as_ref()
+    }
+}
+
+impl<Key: Ord> Borrow<Key> for ValuePtr<Key> {
+    fn borrow(&self) -> &Key {
+        self.as_ref()
+    }
+}
+
+impl<Key: Ord> ValuePtr<Key> {
+    fn as_ref(&self) -> &Key {
+        unsafe { self.0.as_ref().expect("Pointer is None.") }
+    }
+}
+
+impl<Key: Ord> PartialEq for ValuePtr<Key> {
+    fn eq(&self, other: &Self) -> bool {
+        let lhs = self.as_ref();
+        let rhs = other.as_ref();
+        lhs.eq(rhs)
+    }
+}
+
+// make partial_cmp() just return result from cmp()
+impl<Key: Ord> PartialOrd for ValuePtr<Key> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let lhs = self.as_ref();
+        let rhs = other.as_ref();
+        lhs.partial_cmp(rhs)
+    }
+}
+
+impl<Key: Ord> Ord for ValuePtr<Key> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let lhs = self.as_ref();
+        let rhs = other.as_ref();
+        lhs.cmp(rhs)
+    }
+}
+
+impl<Key: Ord + fmt::Display> fmt::Display for ValuePtr<Key> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let value = self.as_ref();
+        value.fmt(f)
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct PagedArray<Key: Ord + Clone + Default> {
+    pages: Vec<Vec<Key>>,
+}
+
+impl<Key: Ord + Clone + Default> PagedArray<Key> {
+    const ARRAY_SIZE: usize = 16;
+    fn to_addresses(idx: usize) -> (usize, usize) {
+        (idx / Self::ARRAY_SIZE, idx % Self::ARRAY_SIZE)
+    }
+    pub fn new() -> Self {
+        Self { pages: Vec::new() }
+    }
+    pub fn get(&self, idx: usize) -> Option<&Key> {
+        let (upper, lower) = Self::to_addresses(idx);
+        self.pages.get(upper)?.get(lower)
+    }
+    pub fn set(&mut self, idx: usize, key: Key) -> &Key {
+        let (upper, lower) = Self::to_addresses(idx);
+        if upper >= self.pages.len() {
+            self.pages
+                .resize(upper + 1, vec![Key::default(); Self::ARRAY_SIZE]);
+        }
+        let array = &mut self.pages[upper];
+        let target = &mut array[lower];
+        *target = key;
+        target
+    }
+}
+
 ///
 /// 値とそのIDを管理します。
 ///
@@ -215,23 +311,23 @@ const NULL_KEY_ID: KeyId = KeyId::max_value();
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Dictionary<Key>
 where
-    Key: Ord + Clone,
+    Key: Ord + Clone + Default,
 {
-    key_to_id: BTreeMap<Key, KeyId>,
-    keys: Vec<Key>,
+    key_to_id: BTreeMap<ValuePtr<Key>, KeyId>,
+    keys: PagedArray<Key>,
 }
 
 impl<Key> Dictionary<Key>
 where
-    Key: Ord + Clone,
+    Key: Ord + Clone + Default,
 {
     ///
     /// Dictionaryインスタンスを新規に作成します。
     ///
-    pub fn new() -> Dictionary<Key> {
-        Dictionary {
+    pub fn new() -> Self {
+        Self {
             key_to_id: BTreeMap::new(),
-            keys: Vec::new(),
+            keys: PagedArray::new(),
         }
     }
     ///
@@ -244,32 +340,36 @@ where
     /// 値を登録します。すでに存在していればそのIDを、新規なら新しいIDを返します。
     ///
     pub fn insert(&mut self, key: Key) -> KeyId {
-        let n_keys = self.num_keys();
-        let id = self.key_to_id.entry(key.clone()).or_insert(n_keys);
-        if *id == n_keys {
-            self.keys.push(key);
-        }
-        *id
+        let new_key_id = self.num_keys();
+        let key = ValuePtr(self.keys.set(new_key_id, key));
+        let key_id = self.key_to_id.entry(key).or_insert(new_key_id);
+        *key_id
     }
     ///
     /// 値に対応するIDを返します。存在しなければ`None`が返ります。
     ///
     pub fn id_of<Q: Ord + ?Sized>(&self, key: &Q) -> Option<KeyId>
     where
-        Key: Borrow<Q>,
+        ValuePtr<Key>: Borrow<Q>,
     {
         self.key_to_id.get(key).copied()
     }
     ///
     /// 値の範囲を指定して、対応する範囲のイテレーターを返します。
     ///
-    pub fn range<T, R>(&self, range: R) -> BTreeRange<Key, KeyId>
+    pub fn range<T, R>(
+        &self,
+        range: R,
+    ) -> Map<
+        BTreeRange<ValuePtr<Key>, KeyId>,
+        for<'a> fn((&'a ValuePtr<Key>, &'a KeyId)) -> (&'a Key, &'a KeyId),
+    >
     where
-        Key: Borrow<T>,
+        ValuePtr<Key>: Borrow<T>,
         R: RangeBounds<T>,
         T: Ord + ?Sized,
     {
-        self.key_to_id.range(range)
+        self.key_to_id.range(range).map(|(k, v)| (k.as_ref(), v))
     }
     ///
     /// 値の範囲を指定して、対応するIDがtrueになったビットマップを返します。
@@ -288,7 +388,7 @@ where
     ///
     pub fn range_into_bits<T, R>(&self, range: R) -> BitMap
     where
-        Key: Borrow<T>,
+        ValuePtr<Key>: Borrow<T>,
         R: RangeBounds<T>,
         T: Ord + ?Sized,
     {
@@ -306,8 +406,7 @@ where
     /// ``key_id >= self.num_keys()` の場合
     ///
     pub fn key_of(&self, key_id: KeyId) -> &Key {
-        assert!(key_id < self.num_keys());
-        &self.keys[key_id]
+        self.keys.get(key_id).expect("index out of range")
     }
 }
 
@@ -341,7 +440,7 @@ where
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Column<Key>
 where
-    Key: Ord + Clone,
+    Key: Ord + Clone + Default,
 {
     dictionary: Dictionary<Key>,
     key_ids: Vec<KeyId>,
@@ -349,7 +448,7 @@ where
 
 impl<Key> Column<Key>
 where
-    Key: Ord + Clone,
+    Key: Ord + Clone + Default,
 {
     /// 新しい`Column`インスタンスを作成します。
     pub fn new() -> Column<Key> {
@@ -384,13 +483,19 @@ where
     }
     pub fn id_of<Q: Ord + ?Sized>(&self, key: &Q) -> Option<KeyId>
     where
-        Key: Borrow<Q>,
+        ValuePtr<Key>: Borrow<Q>,
     {
         self.dictionary.id_of(key)
     }
-    pub fn range<T, R>(&self, range: R) -> BTreeRange<Key, KeyId>
+    pub fn range<T, R>(
+        &self,
+        range: R,
+    ) -> Map<
+        BTreeRange<ValuePtr<Key>, KeyId>,
+        for<'a> fn((&'a ValuePtr<Key>, &'a KeyId)) -> (&'a Key, &'a KeyId),
+    >
     where
-        Key: Borrow<T>,
+        ValuePtr<Key>: Borrow<T>,
         R: RangeBounds<T>,
         T: Ord + ?Sized,
     {
@@ -398,7 +503,7 @@ where
     }
     pub fn range_into_bits<T, R>(&self, range: R) -> BitMap
     where
-        Key: Borrow<T>,
+        ValuePtr<Key>: Borrow<T>,
         R: RangeBounds<T>,
         T: Ord + ?Sized,
     {
