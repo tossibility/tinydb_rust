@@ -66,6 +66,7 @@
             "name": "Debug benchmark 'bench'",
             "cargo": {
                 "args": [
+                    "+nightly",
                     "test",
                     "--no-run",
                     "--bench=bench",
