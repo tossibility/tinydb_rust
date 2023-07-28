@@ -43,7 +43,7 @@
 //!     * スレッドローカルとMVCCを駆使するしかないか...
 //! * Shared-Nothing, Read-Only なシステムなら使えるかな
 //!
-use bit_vec::BitVec;
+use bitvec::prelude::*;
 use std::borrow::Borrow;
 use std::cmp::{self, Ordering};
 use std::collections::{btree_map, BTreeMap, HashMap};
@@ -382,8 +382,8 @@ where
     /// dictionary.insert("Bob");
     /// dictionary.insert("Alice");
     /// let result = dictionary.range_into_bits("Alice".."Bob");
-    /// assert_eq!(result.get(0), Some(true));
-    /// assert_eq!(result.get(1), Some(false));
+    /// assert_eq!(result[0], true);
+    /// assert_eq!(result[1], false);
     /// ```
     ///
     pub fn range_into_bits<T, R>(&self, range: R) -> BitMap
@@ -392,7 +392,7 @@ where
         R: RangeBounds<T>,
         T: Ord + ?Sized,
     {
-        let mut bitmap = BitMap::from_elem(self.num_keys(), false);
+        let mut bitmap = bitvec![0; self.num_keys()];
         for (&_, &key_id) in self.key_to_id.range(range) {
             bitmap.set(key_id, true);
         }
@@ -1146,7 +1146,7 @@ where
                         let end = start + step;
                         let row_ids = self.scan_row_ids(start..end, &mut buffer);
                         for row_id in row_ids {
-                            if let Some(true) = target_key_ids.get(column.id_at(*row_id)) {
+                            if target_key_ids.get(column.id_at(*row_id)).as_deref() == Some(&true) {
                                 valid_row_ids.push(*row_id);
                             }
                         }
@@ -1659,5 +1659,66 @@ mod tests {
                 t
             })
         );
+    }
+    #[test]
+    fn test_bitmap_encoding() {
+        let indices = vec![0, 1, 1, 2, 2, 2, 1, 1, 1, 3, 4, 4, 4, 4, 4];
+        enum Entry {
+            Bitmap(BitVec),
+            RunLength(Vec<usize>),
+        }
+        let mut tree = BTreeMap::new();
+        for i in 0..indices.len() {
+            let val = indices[i];
+            let entry = tree
+                .entry(val)
+                .or_insert_with(|| Entry::Bitmap(bitvec![0; indices.len()]));
+            match entry {
+                Entry::Bitmap(bitmap) => {
+                    bitmap.set(i, true);
+                }
+                Entry::RunLength(_) => {}
+            }
+        }
+        for (_, entry) in tree.iter_mut() {
+            match entry {
+                Entry::Bitmap(bitmap) => {
+                    let mut runs = Vec::new();
+                    let mut run_start = 0;
+                    let mut run_end = 0;
+                    let mut run_bit = bitmap[0];
+                    for i in 1..indices.len() {
+                        let bit = bitmap[i];
+                        if bit != run_bit {
+                            if run_bit {
+                                runs.push(run_start);
+                                runs.push(run_end);
+                            }
+                            run_start = i;
+                            run_bit = bit;
+                        }
+                        run_end = i;
+                    }
+                    if run_bit {
+                        runs.push(run_start);
+                        runs.push(run_end);
+                    }
+                    if runs.len() < bitmap.len() {
+                        *entry = Entry::RunLength(runs);
+                    }
+                }
+                Entry::RunLength(_) => {}
+            }
+        }
+        for (val, entry) in tree.iter() {
+            match entry {
+                Entry::Bitmap(bitmap) => {
+                    println!("{}: {:?}", val, bitmap);
+                }
+                Entry::RunLength(runs) => {
+                    println!("{}: {:?}", val, runs);
+                }
+            }
+        }
     }
 }
