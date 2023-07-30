@@ -1662,17 +1662,32 @@ mod tests {
     }
     #[test]
     fn test_bitmap_encoding() {
-        let indices = vec![0, 1, 1, 2, 2, 2, 1, 1, 1, 3, 4, 4, 4, 4, 4];
+        let key_ids = vec![0, 1, 1, 2, 2, 2, 1, 1, 1, 3, 4, 4, 4, 4, 4];
+        #[derive(Clone, Debug, PartialEq)]
         enum Entry {
             Bitmap(BitVec),
             RunLength(Vec<usize>),
         }
-        let mut tree = BTreeMap::new();
-        for i in 0..indices.len() {
-            let val = indices[i];
-            let entry = tree
-                .entry(val)
-                .or_insert_with(|| Entry::Bitmap(bitvec![0; indices.len()]));
+        let mut entries = Vec::new();
+        let debug_print = |entries: &Vec<Entry>| {
+            for (val, entry) in entries.iter().enumerate() {
+                match entry {
+                    Entry::Bitmap(bitmap) => {
+                        println!("{}: {}", val, bitmap);
+                    }
+                    Entry::RunLength(runs) => {
+                        println!("{}: {:?}", val, runs);
+                    }
+                }
+            }
+        };
+        // ビットマップに変換する。
+        for i in 0..key_ids.len() {
+            let val = key_ids[i];
+            if val >= entries.len() {
+                entries.resize(val + 1, Entry::Bitmap(bitvec![0; key_ids.len()]));
+            }
+            let entry = entries.get_mut(val).unwrap();
             match entry {
                 Entry::Bitmap(bitmap) => {
                     bitmap.set(i, true);
@@ -1680,45 +1695,54 @@ mod tests {
                 Entry::RunLength(_) => {}
             }
         }
-        for (_, entry) in tree.iter_mut() {
+        debug_print(&entries);
+        let expected = entries.clone();
+        // さらにランレングス圧縮する。
+        for entry in entries.iter_mut() {
             match entry {
                 Entry::Bitmap(bitmap) => {
                     let mut runs = Vec::new();
                     let mut run_start = 0;
-                    let mut run_end = 0;
-                    let mut run_bit = bitmap[0];
-                    for i in 1..indices.len() {
+                    let mut test_bit = false;
+                    for i in 0..key_ids.len() {
                         let bit = bitmap[i];
-                        if bit != run_bit {
-                            if run_bit {
-                                runs.push(run_start);
-                                runs.push(run_end);
-                            }
+                        if bit != test_bit {
+                            runs.push(i - run_start);
                             run_start = i;
-                            run_bit = bit;
+                            test_bit = bit;
                         }
-                        run_end = i;
                     }
-                    if run_bit {
-                        runs.push(run_start);
-                        runs.push(run_end);
-                    }
-                    if runs.len() < bitmap.len() {
+                    if runs.len() < bitmap.capacity() {
                         *entry = Entry::RunLength(runs);
                     }
                 }
                 Entry::RunLength(_) => {}
             }
         }
-        for (val, entry) in tree.iter() {
+        debug_print(&entries);
+        // ビットマップに戻す。
+        for entry in entries.iter_mut() {
             match entry {
-                Entry::Bitmap(bitmap) => {
-                    println!("{}: {:?}", val, bitmap);
-                }
+                Entry::Bitmap(_) => {}
                 Entry::RunLength(runs) => {
-                    println!("{}: {:?}", val, runs);
+                    let mut bitmap = bitvec![0; key_ids.len()];
+                    let mut run_start = 0;
+                    let mut test_bit = false;
+                    for run in runs {
+                        if *run > 0 {
+                            bitmap[run_start..run_start + *run].fill(test_bit);
+                        }
+                        run_start += *run;
+                        test_bit = !test_bit;
+                    }
+                    if test_bit {
+                        bitmap[run_start..key_ids.len()].fill(true);
+                    }
+                    *entry = Entry::Bitmap(bitmap);
                 }
             }
         }
+        debug_print(&entries);
+        assert_eq!(entries, expected);
     }
 }
